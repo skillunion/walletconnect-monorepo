@@ -195,6 +195,7 @@ export function getMeta (): IClientMeta | null {
 
           if (href) {
             if (
+              href.toLowerCase().indexOf('data:') === -1 &&
               href.toLowerCase().indexOf('https:') === -1 &&
               href.toLowerCase().indexOf('http:') === -1 &&
               href.indexOf('//') !== 0
