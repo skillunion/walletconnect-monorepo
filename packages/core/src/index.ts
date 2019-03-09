@@ -126,6 +126,7 @@ class Connector {
     if (
       browser &&
       window.location.protocol !== 'https:' &&
+      window.location.protocol !== 'chrome-extension:' &&
       window.location.hostname !== 'localhost'
     ) {
       throw new Error('HTTPS is required for non-localhost origins')
