@@ -634,6 +634,24 @@ class Connector {
     }
   }
 
+  public async loadDapplet (metadata: any) {
+    if (!this._connected) {
+      throw new Error('Session currently disconnected')
+    }
+
+    const request = this._formatRequest({
+      method: 'wallet_loadDapplet',
+      params: [metadata]
+    })
+
+    try {
+      const result = await this._sendCallRequest(request)
+      return result
+    } catch (error) {
+      throw error
+    }
+  }
+
   // -- private --------------------------------------------------------- //
 
   private async _sendRequest (request: IPartialRpcRequest, _topic?: string) {
