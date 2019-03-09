@@ -635,14 +635,14 @@ class Connector {
     }
   }
 
-  public async loadDapplet (metadata: any) {
+  public async loadDapplet (id: string, metadata: any) {
     if (!this._connected) {
       throw new Error('Session currently disconnected')
     }
 
     const request = this._formatRequest({
       method: 'wallet_loadDapplet',
-      params: [metadata]
+      params: [id, metadata]
     })
 
     try {
