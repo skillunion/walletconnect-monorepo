@@ -13,6 +13,12 @@ declare module '@walletconnect/types' {
     >
   }
 
+  export interface ISessionStorage {
+    getSession: () => IWalletConnectSession | null
+    setSession: (session: IWalletConnectSession) => IWalletConnectSession
+    removeSession: () => void
+  }
+
   export interface IEncryptionPayload {
     data: string
     hmac: string
@@ -39,49 +45,38 @@ declare module '@walletconnect/types' {
     params: any
   }
 
-  export interface ITxData {
+  export interface ICallTxData {
+    to?: string
+    value?: number | string
+    gas?: number | string
+    gasLimit?: number | string
+    gasPrice?: number | string
+    nonce?: number | string
+    data?: string
+  }
+
+  export interface ITxData extends ICallTxData {
     from: string
-    to: string
-    nonce: string
-    gasPrice: string
-    gasLimit: string
-    value: string
-    data: string
   }
 
-  export type IPartialRpcResponse = {
-    id: number
-    jsonrpc?: string
-    result?: any
-    error?: {
-      code?: number
-      message: string
-    }
-  }
-
-  export type IJsonRpcResponseSuccess = {
+  export interface IJsonRpcResponseSuccess {
     id: number
     jsonrpc: string
     result: any
   }
 
-  export type IJsonRpcResponseError = {
+  export interface IJsonRpcErrorMessage {
+    code?: number
+    message: string
+  }
+
+  export interface IJsonRpcResponseError {
     id: number
     jsonrpc: string
-    error: {
-      code: number
-      message: string
-    }
+    error: IJsonRpcErrorMessage
   }
 
-  export type IPartialRpcRequest = {
-    id?: number
-    jsonrpc?: string
-    method: string
-    params: any[]
-  }
-
-  export type IJsonRpcRequest = {
+  export interface IJsonRpcRequest {
     id: number
     jsonrpc: string
     method: string
@@ -135,6 +130,8 @@ declare module '@walletconnect/types' {
     approved: boolean
     chainId: number | null
     accounts: string[] | null
+    peerId?: string | null
+    peerMeta?: IClientMeta | null
   }
 
   export interface IWalletConnectSession {

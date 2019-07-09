@@ -1,13 +1,24 @@
-import isNumber from 'lodash.isnumber'
+import BigNumber from 'bignumber.js'
+import {
+  isHexString as _isHexString,
+  hexlify,
+  arrayify
+} from '@ethersproject/bytes'
+import { getAddress } from '@ethersproject/address'
+import { toUtf8Bytes, toUtf8String } from '@ethersproject/strings'
 
 import {
+  ITxData,
   IClientMeta,
   IParseURIResult,
   IRequiredParamsResult,
   IQueryParamsResult,
   IJsonRpcResponseSuccess,
-  IJsonRpcResponseError
+  IJsonRpcResponseError,
+  IJsonRpcErrorMessage
 } from '@walletconnect/types'
+
+// -- ArrayBuffer ------------------------------------------ //
 
 export function convertArrayBufferToBuffer (arrayBuffer: ArrayBuffer): Buffer {
   const hex = convertArrayBufferToHex(arrayBuffer)
@@ -15,14 +26,39 @@ export function convertArrayBufferToBuffer (arrayBuffer: ArrayBuffer): Buffer {
   return result
 }
 
-export function convertBufferToArrayBuffer (buffer: Buffer): ArrayBuffer {
-  const hex = convertBufferToHex(buffer)
-  const result = convertHexToArrayBuffer(hex)
+export function convertArrayBufferToUtf8 (arrayBuffer: ArrayBuffer): string {
+  const utf8 = toUtf8String(new Uint8Array(arrayBuffer))
+  return utf8
+}
+
+export function convertArrayBufferToHex (
+  arrayBuffer: ArrayBuffer,
+  noPrefix?: boolean
+): string {
+  let hex = hexlify(new Uint8Array(arrayBuffer))
+  if (noPrefix) {
+    hex = removeHexPrefix(hex)
+  }
+  return hex
+}
+
+export function convertArrayBufferToNumber (arrayBuffer: ArrayBuffer): number {
+  const hex = convertArrayBufferToHex(arrayBuffer)
+  const num = convertHexToNumber(hex)
+  return num
+}
+
+export function concatArrayBuffers (...args: ArrayBuffer[]): ArrayBuffer {
+  const hex: string = args.map(b => convertArrayBufferToHex(b, true)).join('')
+  const result: ArrayBuffer = convertHexToArrayBuffer(hex)
   return result
 }
 
-export function convertUtf8ToBuffer (utf8: string): Buffer {
-  const result = new Buffer(utf8, 'utf8')
+// -- Buffer ----------------------------------------------- //
+
+export function convertBufferToArrayBuffer (buffer: Buffer): ArrayBuffer {
+  const hex = convertBufferToHex(buffer)
+  const result = convertHexToArrayBuffer(hex)
   return result
 }
 
@@ -31,113 +67,136 @@ export function convertBufferToUtf8 (buffer: Buffer): string {
   return result
 }
 
-export function convertBufferToHex (buffer: Buffer): string {
-  const result = buffer.toString('hex')
-  return result
+export function convertBufferToHex (buffer: Buffer, noPrefix?: boolean): string {
+  let hex = buffer.toString('hex')
+  if (!noPrefix) {
+    hex = addHexPrefix(hex)
+  }
+  return hex
 }
 
-export function convertHexToBuffer (hex: string): Buffer {
-  const result = new Buffer(hex, 'hex')
-  return result
+export function convertBufferToNumber (buffer: Buffer): number {
+  const hex = convertBufferToHex(buffer)
+  const num = convertHexToNumber(hex)
+  return num
 }
 
 export function concatBuffers (...args: Buffer[]): Buffer {
-  const hex: string = args.map(b => convertBufferToHex(b)).join('')
+  const hex: string = args.map(b => convertBufferToHex(b, true)).join('')
   const result: Buffer = convertHexToBuffer(hex)
   return result
 }
 
-export function concatArrayBuffers (...args: ArrayBuffer[]): ArrayBuffer {
-  const hex: string = args.map(b => convertArrayBufferToHex(b)).join('')
-  const result: ArrayBuffer = convertHexToArrayBuffer(hex)
+// -- Utf8 ------------------------------------------------- //
+
+export function convertUtf8ToArrayBuffer (utf8: string): ArrayBuffer {
+  const arrayBuffer = toUtf8Bytes(utf8).buffer
+  return arrayBuffer
+}
+
+export function convertUtf8ToBuffer (utf8: string): Buffer {
+  const result = new Buffer(utf8, 'utf8')
   return result
 }
 
-export function convertArrayBufferToUtf8 (arrayBuffer: ArrayBuffer): string {
-  const array: Uint8Array = new Uint8Array(arrayBuffer)
-  const chars: string[] = []
-  let i: number = 0
+export function convertUtf8ToHex (utf8: string, noPrefix?: boolean): string {
+  const arrayBuffer = convertUtf8ToArrayBuffer(utf8)
+  const hex = convertArrayBufferToHex(arrayBuffer, noPrefix)
+  return hex
+}
 
-  while (i < array.length) {
-    const byte: number = array[i]
-    if (byte < 128) {
-      chars.push(String.fromCharCode(byte))
-      i++
-    } else if (byte > 191 && byte < 224) {
-      chars.push(
-        String.fromCharCode(((byte & 0x1f) << 6) | (array[i + 1] & 0x3f))
-      )
-      i += 2
-    } else {
-      chars.push(
-        String.fromCharCode(
-          ((byte & 0x0f) << 12) |
-            ((array[i + 1] & 0x3f) << 6) |
-            (array[i + 2] & 0x3f)
-        )
-      )
-      i += 3
-    }
-  }
+export function convertUtf8ToNumber (utf8: string): number {
+  const num = new BigNumber(utf8).toNumber()
+  return num
+}
 
-  const utf8: string = chars.join('')
+// -- Number ----------------------------------------------- //
+
+export function convertNumberToBuffer (num: number): Buffer {
+  const hex = convertNumberToHex(num)
+  const buffer = convertHexToBuffer(hex)
+  return buffer
+}
+
+export function convertNumberToArrayBuffer (num: number): ArrayBuffer {
+  const hex = convertNumberToHex(num)
+  const arrayBuffer = convertHexToArrayBuffer(hex)
+  return arrayBuffer
+}
+
+export function convertNumberToUtf8 (num: number): string {
+  const utf8 = new BigNumber(num).toString()
   return utf8
 }
 
-export function convertUtf8ToArrayBuffer (utf8: string): ArrayBuffer {
-  const bytes: number[] = []
-
-  let i = 0
-  utf8 = encodeURI(utf8)
-  while (i < utf8.length) {
-    const byte: number = utf8.charCodeAt(i++)
-    if (byte === 37) {
-      bytes.push(parseInt(utf8.substr(i, 2), 16))
-      i += 2
-    } else {
-      bytes.push(byte)
-    }
+export function convertNumberToHex (
+  num: number | string,
+  noPrefix?: boolean
+): string {
+  let hex = new BigNumber(num).toString(16)
+  hex = sanitizeHex(hex)
+  if (noPrefix) {
+    hex = removeHexPrefix(hex)
   }
-
-  const array: Uint8Array = new Uint8Array(bytes)
-  const arrayBuffer: ArrayBuffer = array.buffer
-  return arrayBuffer
+  return hex
 }
 
-export function convertArrayBufferToHex (arrayBuffer: ArrayBuffer): string {
-  const array: Uint8Array = new Uint8Array(arrayBuffer)
-  const HEX_CHARS: string = '0123456789abcdef'
-  const bytes: string[] = []
-  for (let i = 0; i < array.length; i++) {
-    const byte = array[i]
-    bytes.push(HEX_CHARS[(byte & 0xf0) >> 4] + HEX_CHARS[byte & 0x0f])
-  }
-  const hex: string = bytes.join('')
-  return hex
+// -- Hex -------------------------------------------------- //
+
+export function convertHexToBuffer (hex: string): Buffer {
+  hex = removeHexPrefix(hex)
+  const buffer = new Buffer(hex, 'hex')
+  return buffer
 }
 
 export function convertHexToArrayBuffer (hex: string): ArrayBuffer {
-  const bytes: number[] = []
-
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes.push(parseInt(hex.substr(i, 2), 16))
-  }
-
-  const array: Uint8Array = new Uint8Array(bytes)
-  const arrayBuffer: ArrayBuffer = array.buffer
+  hex = addHexPrefix(hex)
+  const arrayBuffer = arrayify(hex).buffer
   return arrayBuffer
-}
-
-export function convertUtf8ToHex (utf8: string): string {
-  const arrayBuffer = convertUtf8ToArrayBuffer(utf8)
-  const hex = convertArrayBufferToHex(arrayBuffer)
-  return hex
 }
 
 export function convertHexToUtf8 (hex: string): string {
   const arrayBuffer = convertHexToArrayBuffer(hex)
   const utf8 = convertArrayBufferToUtf8(arrayBuffer)
   return utf8
+}
+
+export function convertHexToNumber (hex: string): number {
+  const num = new BigNumber(hex).toNumber()
+  return num
+}
+
+// -- Misc ------------------------------------------------- //
+
+export function sanitizeHex (hex: string): string {
+  hex = removeHexPrefix(hex)
+  hex = hex.length % 2 !== 0 ? '0' + hex : hex
+  if (hex) {
+    hex = addHexPrefix(hex)
+  }
+  return hex
+}
+
+export function addHexPrefix (hex: string): string {
+  if (hex.toLowerCase().substring(0, 2) === '0x') {
+    return hex
+  }
+  return '0x' + hex
+}
+
+export function removeHexPrefix (hex: string): string {
+  if (hex.toLowerCase().substring(0, 2) === '0x') {
+    return hex.substring(2)
+  }
+  return hex
+}
+
+export function isHexString (value: any): boolean {
+  return _isHexString(value)
+}
+
+export function isEmptyString (value: string): boolean {
+  return value === '' || (typeof value === 'string' && value.trim() === '')
 }
 
 export function payloadId (): number {
@@ -164,10 +223,25 @@ export function uuid (): string {
   return result
 }
 
-export const isHexStrict = (hex: string) => {
-  return (
-    (typeof hex === 'string' || isNumber(hex)) && /^(-)?0x[0-9a-f]*$/i.test(hex)
-  )
+export const toChecksumAddress = (address: string) => {
+  return getAddress(address)
+}
+
+export const isValidAddress = (address?: string) => {
+  if (!address) {
+    return false
+  } else if (address.toLowerCase().substring(0, 2) !== '0x') {
+    return false
+  } else if (!/^(0x)?[0-9a-f]{40}$/i.test(address)) {
+    return false
+  } else if (
+    /^(0x)?[0-9a-f]{40}$/.test(address) ||
+    /^(0x)?[0-9A-F]{40}$/.test(address)
+  ) {
+    return true
+  } else {
+    return address === toChecksumAddress(address)
+  }
 }
 
 export function getMeta (): IClientMeta | null {
@@ -294,6 +368,27 @@ export function getMeta (): IClientMeta | null {
   return meta
 }
 
+export function parseQueryString (queryString: string): any {
+  const result: any = {}
+
+  const pairs = (queryString[0] === '?'
+    ? queryString.substr(1)
+    : queryString
+  ).split('&')
+
+  for (let i = 0; i < pairs.length; i++) {
+    const keyArr: string[] = pairs[i].match(/\w+(?==)/i) || []
+    const valueArr: string[] = pairs[i].match(/=.+/i) || []
+    if (keyArr[0]) {
+      result[decodeURIComponent(keyArr[0])] = decodeURIComponent(
+        valueArr[0].substr(1)
+      )
+    }
+  }
+
+  return result
+}
+
 export function parseWalletConnectUri (str: string): IParseURIResult {
   const pathStart: number = str.indexOf(':')
 
@@ -323,24 +418,9 @@ export function parseWalletConnectUri (str: string): IParseURIResult {
     typeof pathEnd !== 'undefined' ? str.substr(pathEnd) : ''
 
   function parseQueryParams (queryString: string): IQueryParamsResult {
-    const result: any = {}
+    const result = parseQueryString(queryString)
 
-    const pairs = (queryString[0] === '?'
-      ? queryString.substr(1)
-      : queryString
-    ).split('&')
-
-    for (let i = 0; i < pairs.length; i++) {
-      const keyArr: string[] = pairs[i].match(/\w+(?==)/i) || []
-      const valueArr: string[] = pairs[i].match(/=.+/i) || []
-      if (keyArr[0]) {
-        result[decodeURIComponent(keyArr[0])] = decodeURIComponent(
-          valueArr[0].substr(1)
-        )
-      }
-    }
-
-    const parameters = {
+    const parameters: IQueryParamsResult = {
       key: result.key || '',
       bridge: result.bridge || ''
     }
@@ -384,15 +464,70 @@ export function promisify (
   return promisifiedFunction
 }
 
-type IJsonRpcErrorMessage = {
-  code?: number
-  message?: string
+export function parsePersonalSign (params: string[]): string[] {
+  if (!isHexString(params[0])) {
+    params[0] = convertUtf8ToHex(params[0])
+  }
+  return params
+}
+
+export function parseTransactionData (
+  txData: Partial<ITxData>
+): Partial<ITxData> {
+  if (typeof txData.from === 'undefined' || !isValidAddress(txData.from)) {
+    throw new Error(`Transaction object must include a valid 'from' value.`)
+  }
+
+  function parseHexValues (value: number | string) {
+    let result = value
+    if (
+      typeof value === 'number' ||
+      (typeof value === 'string' && !isEmptyString(value))
+    ) {
+      if (!isHexString(value)) {
+        result = convertNumberToHex(value)
+      } else if (typeof value === 'string') {
+        result = sanitizeHex(value)
+      }
+    }
+    return result
+  }
+
+  const txDataRPC = {
+    from: sanitizeHex(txData.from),
+    to: typeof txData.to === 'undefined' ? '' : sanitizeHex(txData.to),
+    gasPrice:
+      typeof txData.gasPrice === 'undefined'
+        ? ''
+        : parseHexValues(txData.gasPrice),
+    gasLimit:
+      typeof txData.gasLimit === 'undefined'
+        ? typeof txData.gas === 'undefined'
+          ? ''
+          : parseHexValues(txData.gas)
+        : parseHexValues(txData.gasLimit),
+    value:
+      typeof txData.value === 'undefined' ? '' : parseHexValues(txData.value),
+    nonce:
+      typeof txData.nonce === 'undefined' ? '' : parseHexValues(txData.nonce),
+    data:
+      typeof txData.data === 'undefined' ? '' : sanitizeHex(txData.data) || '0x'
+  }
+
+  const prunable = ['gasPrice', 'gasLimit', 'value', 'nonce']
+  Object.keys(txDataRPC).forEach((key: string) => {
+    if (!txDataRPC[key].trim().length && prunable.includes(key)) {
+      delete txDataRPC[key]
+    }
+  })
+
+  return txDataRPC
 }
 
 export function formatRpcError (
-  error: IJsonRpcErrorMessage
+  error: Partial<IJsonRpcErrorMessage>
 ): { code: number; message: string } {
-  let message = error.message || 'Failed or Rejected Request'
+  const message = error.message || 'Failed or Rejected Request'
   let code: number = -32000
   if (error && !error.code) {
     switch (message) {

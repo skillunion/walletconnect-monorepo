@@ -1,17 +1,17 @@
 const path = require('path')
-const pkg = require('./package.json')
 
 module.exports = {
   mode: 'production',
   entry: {
-    index: './src/index.ts'
+    index: './src/index.js'
   },
   output: {
     path: path.resolve(__dirname, 'lib'),
     filename: '[name].js',
     libraryTarget: 'umd',
-    library: pkg.name,
-    umdNamedDefine: true
+    library: 'WalletConnectSubprovider',
+    umdNamedDefine: true,
+    globalObject: 'this'
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js']
